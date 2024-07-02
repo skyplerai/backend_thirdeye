@@ -1,0 +1,12 @@
+#camers/urls.py
+from django.urls import path
+from .views import StaticCameraView, DDNSCameraView, GetStreamURLView, FaceView, RenameFaceView, DetectedFacesView
+
+urlpatterns = [
+    path('static-camera/', StaticCameraView.as_view(), name='static_camera'),
+    path('ddns-camera/', DDNSCameraView.as_view(), name='ddns_camera'),
+    path('get-stream-url/<str:camera_type>/', GetStreamURLView.as_view(), name='get_stream_url'),
+    path('faces/', FaceView.as_view(), name='faces'),
+    path('rename-face/<int:pk>/', RenameFaceView.as_view(), name='rename_face'),
+    path('detected-faces/', DetectedFacesView.as_view(), name='detected_faces'),
+]
