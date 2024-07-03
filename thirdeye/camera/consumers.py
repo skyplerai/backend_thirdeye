@@ -1,4 +1,3 @@
-#camera/consumers.py
 import cv2
 import json
 import numpy as np
@@ -32,7 +31,7 @@ class CameraConsumer(WebsocketConsumer):
                 frame, face_names, detection_time = process_frame(frame)
                 _, buffer = cv2.imencode('.jpg', frame)
                 response = {
-                    "frame": buffer.tobytes(),
+                    "frame": buffer.tobytes().decode('latin1'),
                     "face_names": face_names,
                     "detection_time": detection_time
                 }
