@@ -1,4 +1,4 @@
-#face_recognition_module.py
+#facerecognizationmodule.py
 import numpy as np
 import cv2
 from mtcnn.mtcnn import MTCNN
