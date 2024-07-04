@@ -42,11 +42,33 @@ INSTALLED_APPS = [
     'rest_framework',
     'rest_framework_simplejwt.token_blacklist',
     'drf_yasg',
+    'corsheaders',
     'channels',
     'authentication',
     'camera',
     
 ]
+
+CORS_ALLOWED_ORIGINS = [
+    'http://54.90.202.192',  # Adjust with your AWS public IP address
+    'https://thethirdeye.com',  # Add other domains if needed
+]
+
+# If you want to allow credentials (cookies, Authorization headers, etc.), set this:
+CORS_ALLOW_CREDENTIALS = True
+
+# Optional: Specify which HTTP methods are allowed for CORS requests (defaults to ['GET', 'OPTIONS', 'HEAD'])
+CORS_ALLOW_METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS']
+
+# Optional: Specify which HTTP headers are allowed for CORS requests (defaults to all headers)
+CORS_ALLOW_HEADERS = ['Authorization', 'Content-Type']
+
+# Optional: Set the CORS Expose Headers (defaults to None)
+CORS_EXPOSE_HEADERS = []
+
+# Optional: Set the CORS Max-Age (defaults to 86400 seconds)
+CORS_MAX_AGE = 86400
+
 SWAGGER_SETTINGS = {
     'SECURITY_DEFINITIONS': {
         'Bearer': {
@@ -67,6 +89,7 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'corsheaders.middleware.CorsMiddleware',
     
 ]
 AUTHENTICATION_BACKENDS = (
