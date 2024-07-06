@@ -23,6 +23,34 @@ from django.core.cache import cache
 logger = logging.getLogger(__name__)
 
 class GoogleSignInView(views.APIView):
+    @swagger_auto_schema(
+        request_body=openapi.Schema(
+            type=openapi.TYPE_OBJECT,
+            properties={
+                'token': openapi.Schema(type=openapi.TYPE_STRING, description='Google token'),
+            },
+            required=['token'],
+        ),
+        responses={
+            200: openapi.Response('Success', openapi.Schema(
+                type=openapi.TYPE_OBJECT,
+                properties={
+                    'user_info': openapi.Schema(
+                        type=openapi.TYPE_OBJECT,
+                        properties={
+                            'username': openapi.Schema(type=openapi.TYPE_STRING),
+                            'email': openapi.Schema(type=openapi.TYPE_STRING),
+                        }
+                    ),
+                    'access_token': openapi.Schema(type=openapi.TYPE_STRING),
+                    'refresh_token': openapi.Schema(type=openapi.TYPE_STRING),
+                    'stream_urls': openapi.Schema(type=openapi.TYPE_ARRAY, items=openapi.Items(type=openapi.TYPE_STRING)),
+                }
+            )),
+            400: 'Invalid token or missing parameter',
+            500: 'Internal server error'
+        }
+    )
     def post(self, request):
         token = request.data.get('token')
         if not token:
@@ -48,6 +76,7 @@ class GoogleSignInView(views.APIView):
             'refresh_token': tokens['refresh'],
             'stream_urls': stream_urls,
         }, status=status.HTTP_200_OK)
+
     
 class RegisterView(generics.GenericAPIView):
     serializer_class = RegisterSerializer

@@ -1,13 +1,50 @@
-from rest_framework import generics, status
+# camera/views.py
+
+from django.shortcuts import render
+from notifications.models import Notification
+from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from .models import StaticCamera, DDNSCamera, CameraStream, Face
-from .serializers import StaticCameraSerializer, DDNSCameraSerializer, CameraStreamSerializer, FaceSerializer, RenameFaceSerializer
+from .serializers import StaticCameraSerializer, DDNSCameraSerializer, CameraStreamSerializer, FaceSerializer, RenameFaceSerializer, RenameCameraSerializer
+from rest_framework import status, generics
 from drf_yasg.utils import swagger_auto_schema
-from rest_framework.views import APIView
+from drf_yasg import openapi
 from .pagination import DynamicPageSizePagination
 
+class NotificationView(APIView):
+    permission_classes = [IsAuthenticated]
 
+    @swagger_auto_schema(
+        operation_description="Get all notifications for the authenticated user",
+        responses={
+            200: openapi.Response(
+                description="List of notifications",
+                examples={
+                    "application/json": [
+                        {
+                            "id": 1,
+                            "verb": "Face Detected",
+                            "description": "John Doe detected in camera 1",
+                            "timestamp": "2023-07-06T12:34:56Z"
+                        },
+                        {
+                            "id": 2,
+                            "verb": "Face Detected",
+                            "description": "Jane Doe detected in camera 2",
+                            "timestamp": "2023-07-06T12:35:56Z"
+                        }
+                    ]
+                }
+            ),
+            401: "Unauthorized"
+        }
+    )
+    def get(self, request):
+        notifications = Notification.objects.filter(recipient=request.user)
+        notification_data = [{"id": n.id, "verb": n.verb, "description": n.description, "timestamp": n.timestamp} for n in notifications]
+        return Response(notification_data, status=200)
+    
 class StaticCameraView(generics.GenericAPIView):
     serializer_class = StaticCameraSerializer
     permission_classes = [IsAuthenticated]
@@ -95,3 +132,38 @@ class DetectedFacesView(generics.ListAPIView):
         if date:
             queryset = queryset.filter(created_at__date=date)
         return queryset
+
+class RenameCameraView(APIView):
+
+    @swagger_auto_schema(
+        request_body=openapi.Schema(
+            type=openapi.TYPE_OBJECT,
+            required=['name'],
+            properties={
+                'name': openapi.Schema(type=openapi.TYPE_STRING, description='New name of the camera'),
+            },
+        ),
+        responses={200: 'OK', 400: 'Bad Request', 404: 'Not Found'},
+    )
+    def patch(self, request, camera_type, pk):
+        name = request.data.get('name')
+        if not name:
+            return Response({"name": ["This field is required."]}, status=status.HTTP_400_BAD_REQUEST)
+
+        if camera_type == 'static':
+            try:
+                camera = StaticCamera.objects.get(pk=pk)
+            except StaticCamera.DoesNotExist:
+                return Response(status=status.HTTP_404_NOT_FOUND)
+        elif camera_type == 'ddns':
+            try:
+                camera = DDNSCamera.objects.get(pk=pk)
+            except DDNSCamera.DoesNotExist:
+                return Response(status=status.HTTP_404_NOT_FOUND)
+        else:
+            return Response(status=status.HTTP_400_BAD_REQUEST)
+
+        camera.name = name
+        camera.save()
+
+        return Response(status=status.HTTP_200_OK)

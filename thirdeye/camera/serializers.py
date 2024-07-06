@@ -1,4 +1,5 @@
-#camera/serializers.py
+# camera/serializers.py
+
 from rest_framework import serializers
 from .models import StaticCamera, DDNSCamera, CameraStream, Face
 
@@ -26,3 +27,6 @@ class RenameFaceSerializer(serializers.ModelSerializer):
     class Meta:
         model = Face
         fields = ['name']
+
+class RenameCameraSerializer(serializers.Serializer):
+    name = serializers.CharField(max_length=255)
