@@ -1,6 +1,6 @@
-# authentication/backends.py
 from django.contrib.auth.backends import BaseBackend
 from django.contrib.auth import get_user_model
+from .utils import google_authenticate
 
 User = get_user_model()
 
@@ -12,6 +12,19 @@ class EmailBackend(BaseBackend):
                 return user
         except User.DoesNotExist:
             return None
+
+    def get_user(self, user_id):
+        try:
+            return User.objects.get(pk=user_id)
+        except User.DoesNotExist:
+            return None
+
+class GoogleBackend(BaseBackend):
+    def authenticate(self, request, token=None, **kwargs):
+        user = google_authenticate(token)
+        if user:
+            return user
+        return None
 
     def get_user(self, user_id):
         try:

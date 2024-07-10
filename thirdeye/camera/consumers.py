@@ -1,3 +1,4 @@
+# camera/consumers.py
 import base64
 import cv2
 import json
@@ -7,6 +8,7 @@ from channels.generic.websocket import WebsocketConsumer
 from .face_recognition_module import process_frame
 from django.contrib.auth import get_user_model
 from notifications.signals import notify
+from .models import StaticCamera, DDNSCamera
 
 User = get_user_model()
 
@@ -44,8 +46,10 @@ class CameraConsumer(WebsocketConsumer):
                 self.send(text_data=json.dumps(response))
                 
                 # Notify users about detected faces
+                camera_name = self.get_camera_name(self.camera_url)
                 for name in face_names:
-                    notification_message = f"{name} detected in {self.camera_url} at {detection_time}, view in database"
+                    detection_time_str = detection_time.strftime('%I:%M %p')
+                    notification_message = f"{name} detected in {camera_name} at {detection_time_str}, view in database"
                     notify.send(self.scope["user"], recipient=self.scope["user"], verb="Face Detected", description=notification_message)
 
             except Exception as e:
@@ -53,3 +57,14 @@ class CameraConsumer(WebsocketConsumer):
                 break
         
         cap.release()
+
+    def get_camera_name(self, camera_url):
+        try:
+            static_camera = StaticCamera.objects.get(ip_address=camera_url)
+            return static_camera.name
+        except StaticCamera.DoesNotExist:
+            try:
+                ddns_camera = DDNSCamera.objects.get(ddns_hostname=camera_url)
+                return ddns_camera.name
+            except DDNSCamera.DoesNotExist:
+                return "Unknown Camera"

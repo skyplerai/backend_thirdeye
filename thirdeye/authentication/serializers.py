@@ -128,7 +128,7 @@ class SetNewPasswordWithOTPSerializer(serializers.Serializer):
         except User.DoesNotExist:
             raise serializers.ValidationError('Invalid email or OTP')
 
-        if not is_otp_valid(user) or user.otp != otp:
+        if not is_otp_valid(user, otp):
             raise serializers.ValidationError('Invalid or expired OTP')
 
         return attrs

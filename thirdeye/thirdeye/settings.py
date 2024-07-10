@@ -80,7 +80,8 @@ SWAGGER_SETTINGS = {
     }
 }
 
-GOOGLE_CLIENT_ID = '48362687558-s7n6a7d3o5p9ne47p9do0nvbsds64k9a.apps.googleusercontent.com'
+GOOGLE_CLIENT_ID = '48362687558-b7qotc3aea0ne3irtbne2tp2kkghk6it.apps.googleusercontent.com'
+GOOGLE_CLIENT_SECRET='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'
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
@@ -93,10 +94,11 @@ MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware',
     
 ]
-AUTHENTICATION_BACKENDS = (
+AUTHENTICATION_BACKENDS = [
+    'django.contrib.auth.backends.ModelBackend',
     'authentication.backends.EmailBackend',
-    'django.contrib.auth.backends.ModelBackend',  # Keep the default backend as fallback
-)
+    'authentication.backends.GoogleBackend',
+]
 
 ROOT_URLCONF = 'thirdeye.urls'
 

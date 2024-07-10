@@ -1,3 +1,4 @@
+#authenticatoion/views.py
 from datetime import datetime, timedelta
 from django.utils import timezone
 import random
@@ -18,7 +19,6 @@ from camera.models import CameraStream
 from drf_yasg.utils import swagger_auto_schema
 from drf_yasg import openapi
 from django.core.cache import cache
-
 
 logger = logging.getLogger(__name__)
 
@@ -57,9 +57,11 @@ class GoogleSignInView(views.APIView):
             return Response({'error': 'Token is required'}, status=status.HTTP_400_BAD_REQUEST)
         
         user = google_authenticate(token)
-        if not user:
+        if user is None:
             return Response({'error': 'Invalid token'}, status=status.HTTP_400_BAD_REQUEST)
-        
+        elif user == 'existing_email':
+            return Response({'error': 'This email is already associated with a regular account'}, status=status.HTTP_400_BAD_REQUEST)
+
         # Create tokens for the user
         tokens = user.tokens()
         
@@ -77,7 +79,8 @@ class GoogleSignInView(views.APIView):
             'stream_urls': stream_urls,
         }, status=status.HTTP_200_OK)
 
-    
+
+
 class RegisterView(generics.GenericAPIView):
     serializer_class = RegisterSerializer
 
@@ -85,6 +88,10 @@ class RegisterView(generics.GenericAPIView):
         user_data = request.data.copy()  # Create a mutable copy of the request data
         serializer = self.serializer_class(data=user_data)
         serializer.is_valid(raise_exception=True)
+
+        email = user_data.get('email')
+        if User.objects.filter(email=email).exists():
+            return Response({'error': 'Email is already registered'}, status=status.HTTP_400_BAD_REQUEST)
 
         verification_code = ''.join(random.choices(string.digits, k=6))
         user_data['verification_code'] = verification_code
@@ -103,9 +110,12 @@ class RegisterView(generics.GenericAPIView):
             Util.send_email(data)
         except Exception as e:
             logger.error(f"Error in registration process: {e}")
-            return Response({'error': 'An error occurred. Please try again later.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return Response({'error': 'An error occurred while sending the verification email. Please try again later.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
         return Response({'detail': 'Verification code sent to your email'}, status=status.HTTP_201_CREATED)
+
+
+
 class VerifyEmail(views.APIView):
     serializer_class = EmailVerificationSerializer
 
@@ -166,29 +176,8 @@ class VerifyEmail(views.APIView):
         }
         Util.send_email(data)
 
-        return Response({'detail': 'Email successfully verified'}, status=status.HTTP_200_OK)  
-class LoginAPIView(generics.GenericAPIView):
-    serializer_class = LoginSerializer
+        return Response({'detail': 'Email successfully verified'}, status=status.HTTP_200_OK)
 
-    def post(self, request):
-        serializer = self.serializer_class(data=request.data)
-        serializer.is_valid(raise_exception=True)
-
-        user = serializer.validated_data['user']
-
-        # Retrieve all stream URLs for the user
-        streams = CameraStream.objects.filter(user=user)
-        stream_urls = [stream.stream_url for stream in streams]
-
-        return Response({
-            'user_info': {
-                'username': user.username,
-                'email': user.email,
-            },
-            'access_token': str(serializer.validated_data['tokens']['access']),
-            'refresh_token': str(serializer.validated_data['tokens']['refresh']),
-            'stream_urls': stream_urls,
-        }, status=status.HTTP_200_OK)
 
 class LoginAPIView(generics.GenericAPIView):
     serializer_class = LoginSerializer
@@ -212,7 +201,8 @@ class LoginAPIView(generics.GenericAPIView):
             'refresh_token': str(serializer.validated_data['tokens']['refresh']),
             'stream_urls': stream_urls,
         }, status=status.HTTP_200_OK)
-    
+
+
 class RequestPasswordResetEmail(generics.GenericAPIView):
     serializer_class = RequestPasswordResetEmailSerializer
 
@@ -231,8 +221,8 @@ class RequestPasswordResetEmail(generics.GenericAPIView):
             otp_request_count = 0
             cache.set(f'first_otp_request_{email}', timezone.now())
 
-        if otp_request_count <= 6:
-            return Response({'error': 'Too many OTP requests. Please try again after 1 hours.'}, status=status.HTTP_429_TOO_MANY_REQUESTS)
+        if otp_request_count >= 6:
+            return Response({'error': 'Too many OTP requests. Please try again after 1 hour.'}, status=status.HTTP_429_TOO_MANY_REQUESTS)
 
         otp = generate_otp()
 
@@ -254,6 +244,7 @@ class RequestPasswordResetEmail(generics.GenericAPIView):
             cache.set(f'first_otp_request_{email}', timezone.now())
 
         return Response({'detail': 'OTP sent to your email'}, status=status.HTTP_200_OK)
+
 
 class SetNewPasswordWithOTPView(generics.GenericAPIView):
     serializer_class = SetNewPasswordWithOTPSerializer

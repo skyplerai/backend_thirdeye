@@ -1,5 +1,4 @@
 # camera/views.py
-
 from django.shortcuts import render
 from notifications.models import Notification
 from rest_framework.views import APIView
@@ -25,13 +24,13 @@ class NotificationView(APIView):
                         {
                             "id": 1,
                             "verb": "Face Detected",
-                            "description": "John Doe detected in camera 1",
+                            "description": "John Doe detected in camera 1 at 12:34 PM, view in database",
                             "timestamp": "2023-07-06T12:34:56Z"
                         },
                         {
                             "id": 2,
                             "verb": "Face Detected",
-                            "description": "Jane Doe detected in camera 2",
+                            "description": "Jane Doe detected in camera 2 at 12:35 PM, view in database",
                             "timestamp": "2023-07-06T12:35:56Z"
                         }
                     ]
@@ -42,9 +41,15 @@ class NotificationView(APIView):
     )
     def get(self, request):
         notifications = Notification.objects.filter(recipient=request.user)
-        notification_data = [{"id": n.id, "verb": n.verb, "description": n.description, "timestamp": n.timestamp} for n in notifications]
-        return Response(notification_data, status=200)
-    
+        notification_data = [
+            {
+                "id": n.id,
+                "verb": n.verb,
+                "description": n.description,
+                "timestamp": n.timestamp.strftime('%Y-%m-%dT%H:%M:%S')
+            } for n in notifications
+        ]
+        return Response(notification_data, status=200)    
 class StaticCameraView(generics.GenericAPIView):
     serializer_class = StaticCameraSerializer
     permission_classes = [IsAuthenticated]
@@ -98,8 +103,11 @@ class FaceView(generics.GenericAPIView):
     def post(self, request):
         serializer = self.serializer_class(data=request.data)
         if serializer.is_valid():
-            Face.objects.create(user=request.user, **serializer.validated_data)
-            return Response({"message": "Face details saved successfully"}, status=status.HTTP_201_CREATED)
+            face = serializer.save(user=request.user)
+            response_serializer = self.serializer_class(face)
+            return Response(response_serializer.data, status=status.HTTP_201_CREATED)
+        else:
+            print(f"Serializer errors: {serializer.errors}")
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 class RenameFaceView(generics.GenericAPIView):
@@ -134,6 +142,7 @@ class DetectedFacesView(generics.ListAPIView):
         return queryset
 
 class RenameCameraView(APIView):
+    permission_classes = [IsAuthenticated]
 
     @swagger_auto_schema(
         request_body=openapi.Schema(
@@ -154,16 +163,16 @@ class RenameCameraView(APIView):
             try:
                 camera = StaticCamera.objects.get(pk=pk)
             except StaticCamera.DoesNotExist:
-                return Response(status=status.HTTP_404_NOT_FOUND)
+                return Response({"error": "Static Camera not found"}, status=status.HTTP_404_NOT_FOUND)
         elif camera_type == 'ddns':
             try:
                 camera = DDNSCamera.objects.get(pk=pk)
             except DDNSCamera.DoesNotExist:
-                return Response(status=status.HTTP_404_NOT_FOUND)
+                return Response({"error": "DDNS Camera not found"}, status=status.HTTP_404_NOT_FOUND)
         else:
-            return Response(status=status.HTTP_400_BAD_REQUEST)
+            return Response({"error": "Invalid camera type"}, status=status.HTTP_400_BAD_REQUEST)
 
         camera.name = name
         camera.save()
 
-        return Response(status=status.HTTP_200_OK)
+        return Response({"message": "Camera renamed successfully"}, status=status.HTTP_200_OK)

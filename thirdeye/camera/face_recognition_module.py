@@ -44,13 +44,13 @@ def process_frame(frame):
             new_face = Face(user_id=1, embedding=face_encoding.tobytes())  # Assuming user_id=1 for simplicity
             new_face.save()
             name = f"Unknown {new_face.id}"
-        
+
         cv2.rectangle(frame, (left, top), (right, bottom), (0, 0, 255), 2)
         cv2.rectangle(frame, (left, bottom - 35), (right, bottom), (0, 0, 255), cv2.FILLED)
         font = cv2.FONT_HERSHEY_DUPLEX
         cv2.putText(frame, name, (left + 6, bottom - 6), font, 1.0, (255, 255, 255), 1)
 
     end_time = time.time()
-    detection_time = end_time - start_time
+    detection_time = time.strftime('%I:%M %p', time.localtime(end_time))
 
     return frame, face_names, detection_time
