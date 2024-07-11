@@ -43,19 +43,16 @@ def process_frame(frame):
 
     for (top, right, bottom, left), name, face_encoding in zip(face_locations, face_names, face_encodings):
         if name == "Unknown":
-            new_face = Face(user_id=1, embedding=face_encoding.tobytes())  # Assuming user_id=1 for simplicity
-            new_face.save()
-            name = f"Unknown {new_face.id}"
-
-        # Extract the face from the frame
-        face_image = frame[top:bottom, left:right]
-        _, buffer = cv2.imencode('.jpg', face_image)
-        face_base64 = base64.b64encode(buffer).decode('utf-8')
-
-        detected_faces.append({
-            "name": name,
-            "image": face_base64
-        })
+            face_base64 = base64.b64encode(face_encoding.tobytes()).decode('utf-8')
+            face_image = frame[top:bottom, left:right]
+            _, buffer = cv2.imencode('.jpg', face_image)
+            face_image_base64 = base64.b64encode(buffer).decode('utf-8')
+            detected_faces.append({
+                "name": name,
+                "embedding": face_base64,
+                "image": face_image_base64,
+                "coordinates": {"top": top, "right": right, "bottom": bottom, "left": left}
+            })
 
         cv2.rectangle(frame, (left, top), (right, bottom), (0, 0, 255), 2)
         cv2.rectangle(frame, (left, bottom - 35), (right, bottom), (0, 0, 255), cv2.FILLED)

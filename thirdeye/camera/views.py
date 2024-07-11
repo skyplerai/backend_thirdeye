@@ -1,4 +1,3 @@
-# camera/views.py
 from django.shortcuts import render
 from notifications.models import Notification
 from rest_framework.views import APIView
@@ -11,45 +10,6 @@ from drf_yasg.utils import swagger_auto_schema
 from drf_yasg import openapi
 from .pagination import DynamicPageSizePagination
 
-class NotificationView(APIView):
-    permission_classes = [IsAuthenticated]
-
-    @swagger_auto_schema(
-        operation_description="Get all notifications for the authenticated user",
-        responses={
-            200: openapi.Response(
-                description="List of notifications",
-                examples={
-                    "application/json": [
-                        {
-                            "id": 1,
-                            "verb": "Face Detected",
-                            "description": "John Doe detected in camera 1 at 12:34 PM, view in database",
-                            "timestamp": "2023-07-06T12:34:56Z"
-                        },
-                        {
-                            "id": 2,
-                            "verb": "Face Detected",
-                            "description": "Jane Doe detected in camera 2 at 12:35 PM, view in database",
-                            "timestamp": "2023-07-06T12:35:56Z"
-                        }
-                    ]
-                }
-            ),
-            401: "Unauthorized"
-        }
-    )
-    def get(self, request):
-        notifications = Notification.objects.filter(recipient=request.user)
-        notification_data = [
-            {
-                "id": n.id,
-                "verb": n.verb,
-                "description": n.description,
-                "timestamp": n.timestamp.strftime('%Y-%m-%dT%H:%M:%S')
-            } for n in notifications
-        ]
-        return Response(notification_data, status=200)      
 class StaticCameraView(generics.GenericAPIView):
     serializer_class = StaticCameraSerializer
     permission_classes = [IsAuthenticated]
@@ -105,20 +65,11 @@ class FaceView(generics.GenericAPIView):
         if serializer.is_valid():
             face = serializer.save(user=request.user)
             response_serializer = self.serializer_class(face)
-            
-            # Send notification
-            notification_message = f"{face.name} added to the database."
-            notify.send(
-                sender=request.user, 
-                recipient=request.user, 
-                verb="Face Added", 
-                description=notification_message
-            )
-            
             return Response(response_serializer.data, status=status.HTTP_201_CREATED)
         else:
             print(f"Serializer errors: {serializer.errors}")
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
 class RenameFaceView(generics.GenericAPIView):
     serializer_class = RenameFaceSerializer
     permission_classes = [IsAuthenticated]
@@ -185,3 +136,43 @@ class RenameCameraView(APIView):
         camera.save()
 
         return Response({"message": "Camera renamed successfully"}, status=status.HTTP_200_OK)
+
+class NotificationView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @swagger_auto_schema(
+        operation_description="Get all notifications for the authenticated user",
+        responses={
+            200: openapi.Response(
+                description="List of notifications",
+                examples={
+                    "application/json": [
+                        {
+                            "id": 1,
+                            "verb": "Face Detected",
+                            "description": "John Doe detected in camera 1 at 12:34 PM, view in database",
+                            "timestamp": "2023-07-06T12:34:56Z"
+                        },
+                        {
+                            "id": 2,
+                            "verb": "Face Detected",
+                            "description": "Jane Doe detected in camera 2 at 12:35 PM, view in database",
+                            "timestamp": "2023-07-06T12:35:56Z"
+                        }
+                    ]
+                }
+            ),
+            401: "Unauthorized"
+        }
+    )
+    def get(self, request):
+        notifications = Notification.objects.filter(recipient=request.user)
+        notification_data = [
+            {
+                "id": n.id,
+                "verb": n.verb,
+                "description": n.description,
+                "timestamp": n.timestamp.strftime('%Y-%m-%dT%H:%M:%S')
+            } for n in notifications
+        ]
+        return Response(notification_data, status=200)    
