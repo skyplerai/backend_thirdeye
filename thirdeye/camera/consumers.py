@@ -1,4 +1,3 @@
-# camera/consumers.py
 import base64
 import cv2
 import json
@@ -35,21 +34,21 @@ class CameraConsumer(WebsocketConsumer):
                 break
             
             try:
-                frame, face_names, detection_time = process_frame(frame)
+                frame, detected_faces, detection_time = process_frame(frame)
                 _, buffer = cv2.imencode('.jpg', frame)
                 frame_base64 = base64.b64encode(buffer).decode('utf-8')
                 response = {
                     "frame": frame_base64,
-                    "face_names": face_names,
+                    "detected_faces": detected_faces,
                     "detection_time": detection_time
                 }
                 self.send(text_data=json.dumps(response))
                 
                 # Notify users about detected faces
                 camera_name = self.get_camera_name(self.camera_url)
-                for name in face_names:
-                    detection_time_str = detection_time.strftime('%I:%M %p')
-                    notification_message = f"{name} detected in {camera_name} at {detection_time_str}, view in database"
+                for face in detected_faces:
+                    detection_time_str = detection_time
+                    notification_message = f"{face['name']} detected in {camera_name} at {detection_time_str}, view in database"
                     notify.send(self.scope["user"], recipient=self.scope["user"], verb="Face Detected", description=notification_message)
 
             except Exception as e:

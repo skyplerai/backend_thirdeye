@@ -49,7 +49,7 @@ class NotificationView(APIView):
                 "timestamp": n.timestamp.strftime('%Y-%m-%dT%H:%M:%S')
             } for n in notifications
         ]
-        return Response(notification_data, status=200)    
+        return Response(notification_data, status=200)      
 class StaticCameraView(generics.GenericAPIView):
     serializer_class = StaticCameraSerializer
     permission_classes = [IsAuthenticated]
@@ -105,11 +105,20 @@ class FaceView(generics.GenericAPIView):
         if serializer.is_valid():
             face = serializer.save(user=request.user)
             response_serializer = self.serializer_class(face)
+            
+            # Send notification
+            notification_message = f"{face.name} added to the database."
+            notify.send(
+                sender=request.user, 
+                recipient=request.user, 
+                verb="Face Added", 
+                description=notification_message
+            )
+            
             return Response(response_serializer.data, status=status.HTTP_201_CREATED)
         else:
             print(f"Serializer errors: {serializer.errors}")
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
 class RenameFaceView(generics.GenericAPIView):
     serializer_class = RenameFaceSerializer
     permission_classes = [IsAuthenticated]

@@ -1,10 +1,10 @@
-#camera/face_recognition_module.py
 import numpy as np
 import cv2
 from mtcnn.mtcnn import MTCNN
 import face_recognition
 from .models import Face
 import time
+import base64
 
 # Initialize the MTCNN detector once
 detector = MTCNN()
@@ -39,11 +39,23 @@ def process_frame(frame):
     # Detect and recognize faces
     face_locations, face_names, face_encodings = recognize_faces(frame, known_face_encodings, known_face_names)
 
+    detected_faces = []
+
     for (top, right, bottom, left), name, face_encoding in zip(face_locations, face_names, face_encodings):
         if name == "Unknown":
             new_face = Face(user_id=1, embedding=face_encoding.tobytes())  # Assuming user_id=1 for simplicity
             new_face.save()
             name = f"Unknown {new_face.id}"
+
+        # Extract the face from the frame
+        face_image = frame[top:bottom, left:right]
+        _, buffer = cv2.imencode('.jpg', face_image)
+        face_base64 = base64.b64encode(buffer).decode('utf-8')
+
+        detected_faces.append({
+            "name": name,
+            "image": face_base64
+        })
 
         cv2.rectangle(frame, (left, top), (right, bottom), (0, 0, 255), 2)
         cv2.rectangle(frame, (left, bottom - 35), (right, bottom), (0, 0, 255), cv2.FILLED)
@@ -53,4 +65,4 @@ def process_frame(frame):
     end_time = time.time()
     detection_time = time.strftime('%I:%M %p', time.localtime(end_time))
 
-    return frame, face_names, detection_time
+    return frame, detected_faces, detection_time
