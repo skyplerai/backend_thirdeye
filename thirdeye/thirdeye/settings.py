@@ -150,8 +150,12 @@ WSGI_APPLICATION = 'thirdeye.wsgi.application'
 
 DATABASES = {
     'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': os.path.join(BASE_DIR, 'db.sqlite3'),
+        'ENGINE': 'django.db.backends.mysql',
+        'NAME': 'THIRDEYE',         # The name of your database
+        'USER': 'KISHOR',     # Your database username
+        'PASSWORD': '#Root782qwerty', # Your database password
+        'HOST': 'ec2-54-234-86-169.compute-1.amazonaws.com',     # The endpoint of your RDS instance
+        'PORT': '3306',                 # The port on which MySQL is running
     }
 }
 
