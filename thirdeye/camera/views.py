@@ -1,3 +1,4 @@
+#camera/views.py
 from django.shortcuts import render
 from notifications.models import Notification
 from rest_framework.views import APIView
@@ -9,6 +10,7 @@ from rest_framework import status, generics
 from drf_yasg.utils import swagger_auto_schema
 from drf_yasg import openapi
 from .pagination import DynamicPageSizePagination
+from datetime import datetime
 
 class StaticCameraView(generics.GenericAPIView):
     serializer_class = StaticCameraSerializer
@@ -97,8 +99,13 @@ class DetectedFacesView(generics.ListAPIView):
     def get_queryset(self):
         queryset = Face.objects.filter(user=self.request.user).order_by('-created_at')
         date = self.request.query_params.get('date', None)
-        if date:
-            queryset = queryset.filter(created_at__date=date)
+        month = self.request.query_params.get('month', None)
+        year = self.request.query_params.get('year', None)
+
+        if date and month and year:
+            queryset = queryset.filter(
+                created_at__day=date, created_at__month=month, created_at__year=year
+            )
         return queryset
 
 class RenameCameraView(APIView):

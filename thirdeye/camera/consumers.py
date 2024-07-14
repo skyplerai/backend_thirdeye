@@ -1,3 +1,4 @@
+#camera/consumers.py
 import base64
 import cv2
 import json

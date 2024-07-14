@@ -1,3 +1,4 @@
+#camera/serializers.py
 from rest_framework import serializers
 from .models import StaticCamera, DDNSCamera, CameraStream, Face
 import numpy as np

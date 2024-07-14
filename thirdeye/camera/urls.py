@@ -1,3 +1,4 @@
+#camera/urls.py
 from django.urls import path
 from .views import StaticCameraView, DDNSCameraView, GetStreamURLView, FaceView, RenameFaceView, DetectedFacesView, RenameCameraView, NotificationView
 
