@@ -7,17 +7,17 @@ from django.utils import timezone
 class Face(models.Model):
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
     name = models.CharField(max_length=255, default="Unknown")
-    embedding = models.TextField()  # Changed from BinaryField to TextField
+    embedding = models.BinaryField()  # Change back to BinaryField
     image = models.ImageField(upload_to='faces/', null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-
+    
     def save(self, *args, **kwargs):
         if self.name.startswith("Unknown"):
             max_unknown = Face.objects.filter(name__startswith="Unknown").count()
             self.name = f"Unknown {max_unknown + 1}"
         super().save(*args, **kwargs)
-        
+
 class StaticCamera(models.Model):
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
     ip_address = models.CharField(max_length=255)

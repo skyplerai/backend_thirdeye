@@ -9,10 +9,12 @@ google-auth
 requests
 opencv-python
 face_recognition
-mtcnn
-keras
-tensorflow
+ultralytics
+torch
+torchvision
 numpy
 python-decouple
 django-notifications-hq
+mysqlclient
+
 
