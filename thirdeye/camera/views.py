@@ -1,16 +1,20 @@
 #camera/views.py
-from django.shortcuts import render
 from notifications.models import Notification
-from rest_framework.views import APIView
-from rest_framework.permissions import IsAuthenticated
-from rest_framework.response import Response
-from .models import StaticCamera, DDNSCamera, CameraStream, Face
-from .serializers import StaticCameraSerializer, DDNSCameraSerializer, CameraStreamSerializer, FaceSerializer, RenameFaceSerializer, RenameCameraSerializer
+from django.shortcuts import get_object_or_404
 from rest_framework import status, generics
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework.permissions import IsAuthenticated
+from .models import StaticCamera, DDNSCamera, CameraStream, Face
+from .serializers import (
+    StaticCameraSerializer, DDNSCameraSerializer, CameraStreamSerializer, 
+    FaceSerializer, RenameFaceSerializer
+)
+from .pagination import DynamicPageSizePagination
+from django.db.models import Q
 from drf_yasg.utils import swagger_auto_schema
 from drf_yasg import openapi
-from .pagination import DynamicPageSizePagination
-from datetime import datetime
+
 
 class StaticCameraView(generics.GenericAPIView):
     serializer_class = StaticCameraSerializer
@@ -58,38 +62,21 @@ class GetStreamURLView(APIView):
         except (StaticCamera.DoesNotExist, DDNSCamera.DoesNotExist):
             return Response({"error": "Camera not found"}, status=status.HTTP_404_NOT_FOUND)
 
-class FaceView(generics.GenericAPIView):
+class FaceView(generics.CreateAPIView):
     serializer_class = FaceSerializer
     permission_classes = [IsAuthenticated]
 
-    def post(self, request):
-        serializer = self.serializer_class(data=request.data)
-        if serializer.is_valid():
-            face = serializer.save(user=request.user)
-            response_serializer = self.serializer_class(face)
-            return Response(response_serializer.data, status=status.HTTP_201_CREATED)
-        else:
-            print(f"Serializer errors: {serializer.errors}")
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    def perform_create(self, serializer):
+        serializer.save(user=self.request.user)
 
-class RenameFaceView(generics.GenericAPIView):
+class RenameFaceView(generics.UpdateAPIView):
+    queryset = Face.objects.all()
     serializer_class = RenameFaceSerializer
     permission_classes = [IsAuthenticated]
 
-    def get_queryset(self):
-        return Face.objects.all()
-
-    def patch(self, request, pk):
-        try:
-            face = Face.objects.get(pk=pk)
-        except Face.DoesNotExist:
-            return Response({"error": "Face not found"}, status=status.HTTP_404_NOT_FOUND)
-        
-        serializer = self.get_serializer(face, data=request.data, partial=True)
-        if serializer.is_valid():
-            serializer.save()
-            return Response({"message": "Face renamed successfully"}, status=status.HTTP_200_OK)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    def get_object(self):
+        obj = get_object_or_404(Face, pk=self.kwargs['pk'], user=self.request.user)
+        return obj
 
 class DetectedFacesView(generics.ListAPIView):
     serializer_class = FaceSerializer
@@ -98,13 +85,15 @@ class DetectedFacesView(generics.ListAPIView):
 
     def get_queryset(self):
         queryset = Face.objects.filter(user=self.request.user).order_by('-created_at')
-        date = self.request.query_params.get('date', None)
-        month = self.request.query_params.get('month', None)
-        year = self.request.query_params.get('year', None)
+        date = self.request.query_params.get('date')
+        month = self.request.query_params.get('month')
+        year = self.request.query_params.get('year')
 
         if date and month and year:
             queryset = queryset.filter(
-                created_at__day=date, created_at__month=month, created_at__year=year
+                Q(created_at__day=date) &
+                Q(created_at__month=month) &
+                Q(created_at__year=year)
             )
         return queryset
 

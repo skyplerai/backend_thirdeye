@@ -7,7 +7,8 @@ from django.utils import timezone
 class Face(models.Model):
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
     name = models.CharField(max_length=255, default="Unknown")
-    embedding = models.BinaryField()
+    embedding = models.TextField()  # Changed from BinaryField to TextField
+    image = models.ImageField(upload_to='faces/', null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -16,7 +17,7 @@ class Face(models.Model):
             max_unknown = Face.objects.filter(name__startswith="Unknown").count()
             self.name = f"Unknown {max_unknown + 1}"
         super().save(*args, **kwargs)
-
+        
 class StaticCamera(models.Model):
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
     ip_address = models.CharField(max_length=255)
@@ -27,7 +28,7 @@ class StaticCamera(models.Model):
     def rtsp_url(self):
         username = urllib.parse.quote(self.username)
         password = urllib.parse.quote(self.password)
-        return f"rtsp://{username}:{password}@{self.ip_address}:554/Streaming/Channels/101"
+        return f"rtsp://{username}:{password}@{self.ip_address}:1024/Streaming/Channels/101"
 
 class DDNSCamera(models.Model):
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
