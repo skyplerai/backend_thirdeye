@@ -16,15 +16,28 @@ class FaceSerializer(serializers.ModelSerializer):
         embedding = validated_data.pop('embedding')
         image_data = validated_data.pop('image', None)
         
-        face = Face.objects.create(embedding=embedding, **validated_data)
+        # Decode the embedding if it's a base64 string
+        try:
+            embedding_bytes = base64.b64decode(embedding)
+        except:
+            # If decoding fails, assume it's already in the correct format
+            embedding_bytes = embedding.encode('utf-8') if isinstance(embedding, str) else embedding
+
+        face = Face.objects.create(embedding=embedding_bytes, **validated_data)
 
         if image_data:
-            format, imgstr = image_data.split(';base64,')
-            ext = format.split('/')[-1]
+            if ';base64,' in image_data:
+                format, imgstr = image_data.split(';base64,')
+                ext = format.split('/')[-1]
+            else:
+                imgstr = image_data
+                ext = 'jpg'  # Default to jpg if format is not specified
+            
             image = ContentFile(base64.b64decode(imgstr), name=f'face_{face.id}.{ext}')
             face.image.save(f'face_{face.id}.{ext}', image, save=True)
 
         return face
+
 
 class RenameFaceSerializer(serializers.ModelSerializer):
     class Meta:

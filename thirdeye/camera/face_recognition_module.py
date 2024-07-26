@@ -7,9 +7,12 @@ import time
 import base64
 from ultralytics import YOLO
 import torch
+import os
+from django.conf import settings
 
 # Initialize the YOLO model
-yolo_model = YOLO('yolov5n-face.pt')  # or use 'yolov5s-face.pt' for a slightly larger but more accurate model
+model_path = os.path.join(settings.BASE_DIR, 'yolov8m-face.pt')
+yolo_model = YOLO(model_path)
 
 def detect_faces(frame):
     results = yolo_model(frame)
