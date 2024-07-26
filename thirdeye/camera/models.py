@@ -1,23 +1,29 @@
 #camera/models.py
 from django.db import models
 from django.conf import settings
-import urllib.parse
+import os
 from django.utils import timezone
 
-class Face(models.Model):
+class TempFace(models.Model):
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
-    name = models.CharField(max_length=255, default="Unknown")
-    embedding = models.BinaryField()  # Change back to BinaryField
-    image = models.ImageField(upload_to='faces/', null=True, blank=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-    
+    face_id = models.CharField(max_length=20, unique=True)
+    image_paths = models.JSONField(default=list)
+    timestamp = models.DateTimeField(auto_now_add=True)
+    processed = models.BooleanField(default=False)
+
+class PermFace(models.Model):
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    name = models.CharField(max_length=100)
+    embeddings = models.JSONField(default=list)
+    image_paths = models.JSONField(default=list)
+    last_seen = models.DateTimeField(auto_now=True)
+
     def save(self, *args, **kwargs):
         if self.name.startswith("Unknown"):
-            max_unknown = Face.objects.filter(name__startswith="Unknown").count()
-            self.name = f"Unknown {max_unknown + 1}"
+            max_unknown = PermFace.objects.filter(name__startswith="Unknown", user=self.user).count()
+            self.name = f"Unknown{max_unknown + 1:03d}"
         super().save(*args, **kwargs)
-
+        
 class StaticCamera(models.Model):
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
     ip_address = models.CharField(max_length=255)
@@ -26,9 +32,7 @@ class StaticCamera(models.Model):
     name = models.CharField(max_length=255, default="Static Camera")
 
     def rtsp_url(self):
-        username = urllib.parse.quote(self.username)
-        password = urllib.parse.quote(self.password)
-        return f"rtsp://{username}:{password}@{self.ip_address}:1024/Streaming/Channels/101"
+        return f"rtsp://{self.username}:{self.password}@{self.ip_address}:1024/Streaming/Channels/101"
 
 class DDNSCamera(models.Model):
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
@@ -38,9 +42,7 @@ class DDNSCamera(models.Model):
     name = models.CharField(max_length=255, default="DDNS Camera")
 
     def rtsp_url(self):
-        username = urllib.parse.quote(self.username)
-        password = urllib.parse.quote(self.password)
-        return f"rtsp://{username}:{password}@{self.ddns_hostname}:554/Streaming/Channels/101"
+        return f"rtsp://{self.username}:{self.password}@{self.ddns_hostname}:554/Streaming/Channels/101"
 
 class CameraStream(models.Model):
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)

@@ -16,5 +16,5 @@ numpy
 python-decouple
 django-notifications-hq
 mysqlclient
-
+deep_sort_realtime
 
