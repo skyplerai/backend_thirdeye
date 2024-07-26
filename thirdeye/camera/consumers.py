@@ -1,89 +1,69 @@
-#camera/consumers.py
-import base64
-import time
-import cv2
 import json
-import numpy as np
-import asyncio
+import cv2
+import base64
 from channels.generic.websocket import AsyncWebsocketConsumer
-from .face_recognition_module import process_frame
-from django.contrib.auth import get_user_model
-from notifications.signals import notify
-from .models import StaticCamera, DDNSCamera
 from asgiref.sync import sync_to_async
-
-User = get_user_model()
+from .models import CameraStream, Face
+from .face_recognition_module import process_frame
 
 class CameraConsumer(AsyncWebsocketConsumer):
     async def connect(self):
+        self.stream_id = self.scope['url_route']['kwargs']['stream_id']
+        self.stop_stream = False
         await self.accept()
-        self.camera_url = self.scope['url_route']['kwargs']['camera_url']
-        self.frame_count = 0
-        self.last_send_time = 0
-        await self.stream_camera()
+        await self.start_stream()
 
     async def disconnect(self, close_code):
-        pass
+        self.stop_stream = True
 
-    async def stream_camera(self):
-        cap = cv2.VideoCapture(self.camera_url)
-        if not cap.isOpened():
-            await self.send(text_data=json.dumps({"error": "Failed to open camera stream"}))
-            return
+    async def receive(self, text_data):
+        data = json.loads(text_data)
+        if data.get('command') == 'stop_stream':
+            self.stop_stream = True
+
+    async def start_stream(self):
+        stream = await sync_to_async(CameraStream.objects.get)(id=self.stream_id)
+        cap = cv2.VideoCapture(stream.stream_url)
         
-        while cap.isOpened():
-            ret, frame = cap.read()
-            if not ret:
-                break
-            
-            self.frame_count += 1
-            if self.frame_count % 5 != 0:  # Process every 5th frame
-                continue
-            
-            current_time = time.time()
-            if current_time - self.last_send_time < 0.1:  # Rate limit to 10 FPS
-                continue
-            
-            try:
-                frame, detected_faces, detection_time = await sync_to_async(process_frame)(frame)
-                _, buffer = cv2.imencode('.webp', frame, [cv2.IMWRITE_WEBP_QUALITY, 80])
-                frame_base64 = base64.b64encode(buffer).decode('utf-8')
-                response = {
-                    "frame": frame_base64,
-                    "detected_faces": detected_faces,
-                    "detection_time": detection_time
-                }
-                await self.send(text_data=json.dumps(response))
-                self.last_send_time = current_time
-                
-                # Notify users about detected faces
-                await self.notify_users(detected_faces)
-            except Exception as e:
-                await self.send(text_data=json.dumps({"error": str(e)}))
-                break
-        
-        cap.release()
-
-    async def notify_users(self, detected_faces):
-        camera_name = await self.get_camera_name(self.camera_url)
-        for face in detected_faces:
-            detection_time_str = time.strftime('%I:%M %p')
-            notification_message = f"{face['name']} detected in {camera_name} at {detection_time_str}, view in database"
-            await sync_to_async(notify.send)(
-                self.scope["user"], 
-                recipient=self.scope["user"], 
-                verb="Face Detected", 
-                description=notification_message
-            )
-
-    @staticmethod
-    async def get_camera_name(camera_url):
         try:
-            static_camera = await sync_to_async(StaticCamera.objects.get)(ip_address=camera_url)
-            return static_camera.name
-        except StaticCamera.DoesNotExist:
-            try:
-                ddns_camera = await sync_to_async(DDNSCamera.objects.get)(ddns_hostname=camera_url)
-                return ddns_camera.name
-            except DDNSCamera.DoesNotExist:
-                return "Unknown Camera"
+            while not self.stop_stream:
+                ret, frame = cap.read()
+                if not ret:
+                    break
+                
+                # Process frame (face detection)
+                processed_frame, detected_faces, detection_time = await sync_to_async(process_frame)(frame)
+                
+                # Draw bounding boxes on the frame
+                for face_data in detected_faces:
+                    x1, y1 = face_data['coordinates']['left'], face_data['coordinates']['top']
+                    x2, y2 = face_data['coordinates']['right'], face_data['coordinates']['bottom']
+                    cv2.rectangle(processed_frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
+                    cv2.putText(processed_frame, face_data['name'], (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 255, 0), 2)
+
+                # Encode frame to base64
+                _, buffer = cv2.imencode('.jpg', processed_frame)
+                base64_frame = base64.b64encode(buffer).decode('utf-8')
+                
+                # Save detected faces
+                for face_data in detected_faces:
+                    await self.save_face(face_data)
+                
+                # Send frame and detected faces to client
+                await self.send(text_data=json.dumps({
+                    'frame': base64_frame,
+                    'detected_faces': detected_faces,
+                    'detection_time': detection_time
+                }))
+        finally:
+            cap.release()
+            await self.close()
+
+    @sync_to_async
+    def save_face(self, face_data):
+        face, created = Face.objects.get_or_create(
+            name=face_data['name'],
+            defaults={'embedding': face_data['embedding']}
+        )
+        if created:
+            face.image.save(f"{face.name}.jpg", base64.b64decode(face_data['image']))
