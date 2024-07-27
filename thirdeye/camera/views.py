@@ -79,6 +79,20 @@ class FaceView(generics.ListAPIView):
             )
         return queryset
 
+    def list(self, request, *args, **kwargs):
+        queryset = self.get_queryset()
+        page = self.paginate_queryset(queryset)
+        if page is not None:
+            serializer = self.get_serializer(page, many=True)
+            data = serializer.data
+            for face in data:
+                if face['image_paths']:
+                    face['image_url'] = request.build_absolute_uri(face['image_paths'][0])
+            return self.get_paginated_response(data)
+
+        serializer = self.get_serializer(queryset, many=True)
+        return Response(serializer.data)
+
 class RenameFaceView(generics.UpdateAPIView):
     queryset = PermFace.objects.all()
     serializer_class = RenameFaceSerializer

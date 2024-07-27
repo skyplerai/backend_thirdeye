@@ -8,10 +8,17 @@ class TempFaceSerializer(serializers.ModelSerializer):
         fields = ['id', 'face_id', 'timestamp']
 
 class PermFaceSerializer(serializers.ModelSerializer):
+    image_url = serializers.SerializerMethodField()
+
     class Meta:
         model = PermFace
-        fields = ['id', 'name', 'last_seen']
+        fields = ['id', 'name', 'last_seen', 'image_url']
 
+    def get_image_url(self, obj):
+        request = self.context.get('request')
+        if obj.image_paths and request is not None:
+            return request.build_absolute_uri(obj.image_paths[0])
+        return None
 class RenameFaceSerializer(serializers.ModelSerializer):
     class Meta:
         model = PermFace

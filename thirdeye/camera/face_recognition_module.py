@@ -107,9 +107,13 @@ def save_face_image(frame, track, user):
             filename = os.path.join(directory, f"{face_id}_{image_count:02d}.jpg")
             cv2.imwrite(filename, face_img)
             
+            # Get the relative path for the URL
+            relative_path = os.path.relpath(filename, settings.MEDIA_ROOT)
+            image_url = f"{settings.MEDIA_URL}{relative_path}"
+            
             # Update database using Django ORM
             temp_face, created = TempFace.objects.get_or_create(user=user, face_id=face_id)
-            temp_face.image_paths.append(filename)
+            temp_face.image_paths.append(image_url)
             temp_face.save()
 
             # Check if this face should be moved to PermFace
@@ -123,7 +127,7 @@ def save_face_image(frame, track, user):
                 return perm_face
             return temp_face
     
-    return None
+    return temp_face or None, image_url
 
 def process_frame(frame, user):
     faces = detect_faces(frame)
@@ -137,7 +141,7 @@ def process_frame(frame, user):
         if not track.is_confirmed() or track.time_since_update > 1:
             continue
         bbox = track.to_tlbr()
-        face = save_face_image(frame, track, user)
+        face, image_url = save_face_image(frame, track, user)
         if face:
             cv2.rectangle(frame, (int(bbox[0]), int(bbox[1])), (int(bbox[2]), int(bbox[3])), (255, 0, 0), 2)
             cv2.putText(frame, face.name if isinstance(face, PermFace) else "Processing", 
@@ -147,7 +151,8 @@ def process_frame(frame, user):
                 'id': face.id,
                 'name': face.name if isinstance(face, PermFace) else "Processing",
                 'face_id': face.face_id if isinstance(face, TempFace) else None,
-                'time': timezone.localtime(face.timestamp if isinstance(face, TempFace) else face.last_seen).strftime('%I:%M %p')
+                'time': timezone.localtime(face.timestamp if isinstance(face, TempFace) else face.last_seen).strftime('%I:%M %p'),
+                'image_url': image_url
             })
     
     return frame, detected_faces
