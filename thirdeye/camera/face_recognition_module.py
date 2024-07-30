@@ -20,9 +20,12 @@ from .models import TempFace, PermFace
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+model_path = os.path.join(settings.BASE_DIR, 'yolov8m-face.pt')
+
 # Initialize YOLO model
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
-facemodel = YOLO('yolov8m-face.pt').to(device)
+facemodel = YOLO(model_path).to(device)
+logger.info(f"YOLO model loaded on device: {device}")
 
 # Initialize DeepSORT
 max_cosine_distance = 0.3
@@ -130,7 +133,9 @@ def save_face_image(frame, track, user):
     return temp_face or None, image_url
 
 def process_frame(frame, user):
+    logger.info("Processing frame")
     faces = detect_faces(frame)
+    logger.info(f"Detected {len(faces)} faces")
     detections = [Detection(face[:4], face[4], generate_simple_feature(face, frame)) for face in faces]
     
     tracker.predict()

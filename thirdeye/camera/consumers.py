@@ -5,6 +5,11 @@ from channels.generic.websocket import AsyncWebsocketConsumer
 from .face_recognition_module import generate_frames
 from .models import StaticCamera, DDNSCamera
 from asgiref.sync import sync_to_async
+import logging
+
+# Set up logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 class CameraConsumer(AsyncWebsocketConsumer):
     async def connect(self):
@@ -31,6 +36,7 @@ class CameraConsumer(AsyncWebsocketConsumer):
 
     async def send_frame(self):
         frame, detected_faces = next(self.frame_generator)
+        logger.info(f"Sending frame with {len(detected_faces)} detected faces")
         await self.send(text_data=json.dumps({
             'frame': frame.decode('utf-8'),
             'detected_faces': detected_faces
