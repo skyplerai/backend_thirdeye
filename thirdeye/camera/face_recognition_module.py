@@ -24,6 +24,7 @@ model_path = os.path.join(settings.BASE_DIR, 'yolov8m-face.pt')
 
 # Initialize YOLO model
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
+print(device)
 facemodel = YOLO(model_path).to(device)
 logger.info(f"YOLO model loaded on device: {device}")
 
@@ -195,8 +196,7 @@ def generate_frames(cap, user):
                 frame, detected_faces = result_queue.get()
                 ret, buffer = cv2.imencode('.jpg', frame)
                 frame = buffer.tobytes()
-                yield (b'--frame\r\n'
-                       b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n', detected_faces)
+                yield frame, detected_faces  # Changed: Remove MIME type headers
             else:
                 time.sleep(0.01)
     finally:
