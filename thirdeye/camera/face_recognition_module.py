@@ -1,91 +1,66 @@
-import cv2
-import numpy as np
-from deep_sort_realtime.deep_sort import nn_matching
-from deep_sort_realtime.deep_sort.detection import Detection
-from deep_sort_realtime.deep_sort.tracker import Tracker
-import os
-from datetime import datetime, date
-import logging
-import torch
+#camera/face_recognition_module.py
+from camera.models import Face
 from ultralytics import YOLO
-from django.utils import timezone
+import cv2
+import face_recognition
+import numpy as np
+import base64
+import time
+import os
 from django.conf import settings
-from .models import TempFace, PermFace
 
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
-
+# Initialize the YOLO model
 model_path = os.path.join(settings.BASE_DIR, 'yolov8m-face.pt')
-device = 'cuda' if torch.cuda.is_available() else 'cpu'
-logger.info(f"Using device: {device}")
-facemodel = YOLO(model_path).to(device)
-logger.info(f"YOLO model loaded on device: {device}")
+yolo_model = YOLO(model_path)
 
-max_cosine_distance = 0.3
-nn_budget = 300
-metric = nn_matching.NearestNeighborDistanceMetric("cosine", max_cosine_distance, nn_budget)
-tracker = Tracker(metric, max_age=100)
-
-def detect_faces(frame):
-    try:
-        frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        results = facemodel(frame_rgb, conf=0.49)
-        faces = []
-        for result in results:
-            boxes = result.boxes
-            for box in boxes:
-                x1, y1, x2, y2 = box.xyxy[0].cpu().numpy()
-                confidence = box.conf.item()
-                faces.append([x1, y1, x2 - x1, y2 - y1, confidence])
-        return np.array(faces)
-    except Exception as e:
-        logger.error(f"Error detecting faces: {str(e)}")
-        return np.array([])
-
-def generate_simple_feature(face, frame):
-    try:
-        x, y, w, h, _ = face.astype(int)
-        face_roi = frame[y:y+h, x:x+w]
-        if face_roi.size == 0:
-            return np.zeros(64*64)
-        face_roi = cv2.resize(face_roi, (64, 64))
-        feature = cv2.cvtColor(face_roi, cv2.COLOR_BGR2GRAY).flatten()
-        norm = np.linalg.norm(feature)
-        return feature / norm if norm != 0 else feature
-    except Exception as e:
-        logger.error(f"Error generating feature: {str(e)}")
-        return np.zeros(64*64)
-
-def process_frame(frame, user):
-    try:
-        logger.info("Processing frame")
-        faces = detect_faces(frame)
-        logger.info(f"Detected {len(faces)} faces")
-        detections = [Detection(face[:4], face[4], generate_simple_feature(face, frame)) for face in faces]
-        
-        tracker.predict()
-        tracker.update(detections)
-        
-        detected_faces = []
-        for track in tracker.tracks:
-            if not track.is_confirmed() or track.time_since_update > 1:
-                continue
-            bbox = track.to_tlbr()
-            face, image_url = save_face_image(frame, track, user)
-            if face:
-                cv2.rectangle(frame, (int(bbox[0]), int(bbox[1])), (int(bbox[2]), int(bbox[3])), (255, 0, 0), 2)
-                cv2.putText(frame, face.name if isinstance(face, PermFace) else "Processing", 
-                            (int(bbox[0]), int(bbox[1]) - 10),
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2)
-                detected_faces.append({
-                    'id': face.id,
-                    'name': face.name if isinstance(face, PermFace) else "Processing",
-                    'face_id': face.face_id if isinstance(face, TempFace) else None,
-                    'time': timezone.localtime(face.timestamp if isinstance(face, TempFace) else face.last_seen).strftime('%I:%M %p'),
-                    'image_url': image_url
+def process_frame(frame):
+    start_time = time.time()
+    
+    # Fetch known faces from the database
+    known_faces = Face.objects.all()
+    known_face_encodings = [np.frombuffer(face.embedding, dtype=np.float64) for face in known_faces]
+    known_face_names = [face.name for face in known_faces]
+    
+    # Use YOLO to detect faces
+    results = yolo_model(frame, conf=0.3)  # Lowered confidence threshold
+    
+    processed_faces = []
+    for result in results:
+        boxes = result.boxes.cpu().numpy()
+        for box in boxes:
+            x1, y1, x2, y2 = map(int, box.xyxy[0])
+            conf = float(box.conf)
+            
+            face_img = frame[y1:y2, x1:x2]
+            rgb_face = cv2.cvtColor(face_img, cv2.COLOR_BGR2RGB)
+            
+            # Use face_recognition for encoding
+            face_encodings = face_recognition.face_encodings(rgb_face)
+            if face_encodings:
+                face_encoding = face_encodings[0]
+                name = recognize_face(face_encoding, known_face_encodings, known_face_names)
+                
+                _, buffer = cv2.imencode('.jpg', face_img)
+                face_image_base64 = base64.b64encode(buffer).decode('utf-8')
+                processed_faces.append({
+                    "name": name,
+                    "embedding": base64.b64encode(face_encoding.tobytes()).decode('utf-8'),
+                    "image": face_image_base64,
+                    "coordinates": {"top": y1, "right": x2, "bottom": y2, "left": x1}
                 })
-        
-        return frame, detected_faces
-    except Exception as e:
-        logger.error(f"Error processing frame: {str(e)}")
-        return frame, []
+                
+                # Draw rectangle and name on the frame
+                cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
+                cv2.putText(frame, f"{name} {conf:.2f}", (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 255, 0), 2)
+    
+    end_time = time.time()
+    detection_time = end_time - start_time
+    return frame, processed_faces, detection_time
+
+def recognize_face(face_encoding, known_face_encodings, known_face_names):
+    matches = face_recognition.compare_faces(known_face_encodings, face_encoding)
+    name = "Unknown"
+    if True in matches:
+        first_match_index = matches.index(True)
+        name = known_face_names[first_match_index]
+    return name
