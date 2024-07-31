@@ -151,14 +151,13 @@ WSGI_APPLICATION = 'thirdeye.wsgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.mysql',
-        'NAME': 'THIRDEYE',         # The name of your database
-        'USER': 'KISHOR',     # Your database username
+        'NAME': 'THETHIRDEYE',         # The name of your database
+        'USER': 'Kishor',     # Your database username
         'PASSWORD': '#Root782qwerty', # Your database password
-        'HOST': 'ec2-54-234-86-169.compute-1.amazonaws.com',     # The endpoint of your RDS instance
+        'HOST': 'ec2-13-201-59-248.ap-south-1.compute.amazonaws.com',     # The endpoint of your RDS instance
         'PORT': '3306',                 # The port on which MySQL is running
     }
 }
-
 # Password validation
 # https://docs.djangoproject.com/en/5.0/ref/settings/#auth-password-validators
 
