@@ -1,5 +1,5 @@
 #camera/face_recognition_module.py
-from camera.models import Face
+from camera.models import PermFace
 from ultralytics import YOLO
 import cv2
 import face_recognition
@@ -17,8 +17,8 @@ def process_frame(frame):
     start_time = time.time()
     
     # Fetch known faces from the database
-    known_faces = Face.objects.all()
-    known_face_encodings = [np.frombuffer(face.embedding, dtype=np.float64) for face in known_faces]
+    known_faces = PermFace.objects.all()
+    known_face_encodings = [np.frombuffer(face.embeddings, dtype=np.float64) for face in known_faces]
     known_face_names = [face.name for face in known_faces]
     
     # Use YOLO to detect faces

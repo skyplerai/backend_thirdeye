@@ -5,7 +5,7 @@ import cv2
 import base64
 from channels.generic.websocket import AsyncWebsocketConsumer
 from asgiref.sync import sync_to_async
-from .models import CameraStream, Face
+from .models import CameraStream, PermFace, TempFace
 from .face_recognition_module import process_frame
 
 class CameraConsumer(AsyncWebsocketConsumer):
@@ -42,7 +42,7 @@ class CameraConsumer(AsyncWebsocketConsumer):
                 
                 # Save detected faces
                 for face_data in detected_faces:
-                    await self.save_face(face_data)  # Changed: Removed sync_to_async here
+                    await self.save_face(face_data)
                 
                 # Send frame and detected faces to client
                 await self.send(text_data=json.dumps({
@@ -56,9 +56,9 @@ class CameraConsumer(AsyncWebsocketConsumer):
 
     @sync_to_async
     def save_face(self, face_data):
-        face, created = Face.objects.get_or_create(
+        face, created = PermFace.objects.get_or_create(
             name=face_data['name'],
-            defaults={'embedding': face_data['embedding']}
+            defaults={'embeddings': face_data['embedding']}
         )
         if created:
             face.image.save(f"{face.name}.jpg", base64.b64decode(face_data['image']))
