@@ -47,18 +47,25 @@ class GetStreamURLView(APIView):
         try:
             if camera_type == 'static':
                 cameras = StaticCamera.objects.filter(user=request.user)
-            else:
+            elif camera_type == 'ddns':
                 cameras = DDNSCamera.objects.filter(user=request.user)
-                
+            else:
+                return Response({"error": "Invalid camera type"}, status=status.HTTP_400_BAD_REQUEST)
+
             stream_urls = []
             for camera in cameras:
-                streams = CameraStream.objects.filter(user=request.user, camera=camera if camera_type == 'static' else None, ddns_camera=camera if camera_type != 'static' else None)
+                streams = CameraStream.objects.filter(
+                    user=request.user,
+                    camera=camera if camera_type == 'static' else None,
+                    ddns_camera=camera if camera_type == 'ddns' else None
+                )
                 for stream in streams:
-                    stream_urls.append(stream.stream_url)
-                    
+                    # Convert RTSP URL to WebSocket URL
+                    ws_url = f"ws://{request.get_host()}/ws/camera/{stream.id}/"
+                    stream_urls.append(ws_url)
             return Response({"stream_urls": stream_urls}, status=status.HTTP_200_OK)
-        except (StaticCamera.DoesNotExist, DDNSCamera.DoesNotExist):
-            return Response({"error": "Camera not found"}, status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 class FaceView(generics.ListAPIView):
     serializer_class = PermFaceSerializer

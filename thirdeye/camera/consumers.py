@@ -1,5 +1,4 @@
-# camera/consumers.py
-
+#camera/consumers.py
 import json
 import cv2
 import base64
@@ -24,25 +23,32 @@ class CameraConsumer(AsyncWebsocketConsumer):
             self.stop_stream = True
 
     async def start_stream(self):
-        stream = await sync_to_async(CameraStream.objects.get)(id=self.stream_id)
-        cap = cv2.VideoCapture(stream.stream_url)
-        
         try:
+            stream = await sync_to_async(CameraStream.objects.get)(id=self.stream_id)
+            
+            # Use cv2.VideoCapture with RTSP transport
+            gst_str = ('rtspsrc location={} latency=0 ! '
+                       'rtph264depay ! h264parse ! avdec_h264 ! '
+                       'videoconvert ! appsink').format(stream.stream_url)
+            cap = cv2.VideoCapture(gst_str, cv2.CAP_GSTREAMER)
+
+            if not cap.isOpened():
+                await self.send(text_data=json.dumps({
+                    'error': 'Failed to open video stream'
+                }))
+                return
+
             while not self.stop_stream:
                 ret, frame = cap.read()
                 if not ret:
                     break
                 
                 # Process frame (face detection)
-                processed_frame, detected_faces, detection_time = await sync_to_async(process_frame)(frame)
+                processed_frame, detected_faces, detection_time = await sync_to_async(process_frame)(frame, stream.user)
                 
                 # Encode frame to base64
                 _, buffer = cv2.imencode('.jpg', processed_frame)
                 base64_frame = base64.b64encode(buffer).decode('utf-8')
-                
-                # Save detected faces
-                for face_data in detected_faces:
-                    await self.save_face(face_data)
                 
                 # Send frame and detected faces to client
                 await self.send(text_data=json.dumps({
@@ -50,15 +56,23 @@ class CameraConsumer(AsyncWebsocketConsumer):
                     'detected_faces': detected_faces,
                     'detection_time': detection_time
                 }))
+
+        except Exception as e:
+            await self.send(text_data=json.dumps({
+                'error': str(e)
+            }))
         finally:
-            cap.release()
+            if 'cap' in locals():
+                cap.release()
             await self.close()
 
     @sync_to_async
-    def save_face(self, face_data):
+    def save_face(self, face_data, user):
         face, created = PermFace.objects.get_or_create(
             name=face_data['name'],
+            user=user,
             defaults={'embeddings': face_data['embedding']}
         )
         if created:
-            face.image.save(f"{face.name}.jpg", base64.b64decode(face_data['image']))
+            face.image_paths = [face_data['image']]  # Store base64 image
+            face.save()

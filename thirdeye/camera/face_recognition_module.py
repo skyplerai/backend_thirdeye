@@ -1,5 +1,5 @@
 #camera/face_recognition_module.py
-from camera.models import PermFace
+from .models import PermFace
 from ultralytics import YOLO
 import cv2
 import face_recognition
@@ -13,11 +13,11 @@ from django.conf import settings
 model_path = os.path.join(settings.BASE_DIR, 'yolov8m-face.pt')
 yolo_model = YOLO(model_path)
 
-def process_frame(frame):
+def process_frame(frame, user):
     start_time = time.time()
     
     # Fetch known faces from the database
-    known_faces = PermFace.objects.all()
+    known_faces = PermFace.objects.filter(user=user)
     known_face_encodings = [np.frombuffer(face.embeddings, dtype=np.float64) for face in known_faces]
     known_face_names = [face.name for face in known_faces]
     
@@ -64,3 +64,14 @@ def recognize_face(face_encoding, known_face_encodings, known_face_names):
         first_match_index = matches.index(True)
         name = known_face_names[first_match_index]
     return name
+
+def save_face(face_data, user):
+    face, created = PermFace.objects.get_or_create(
+        name=face_data['name'],
+        user=user,
+        defaults={'embeddings': face_data['embedding']}
+    )
+    if created:
+        face.image_paths = [face_data['image']]  # Store base64 image
+        face.save()
+    return face
