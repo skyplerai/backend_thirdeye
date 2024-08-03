@@ -1,7 +1,9 @@
-# camera/consumers.py
 import json
-import cv2
 import base64
+import time
+import vlc
+import cv2
+import numpy as np
 from channels.generic.websocket import AsyncWebsocketConsumer
 from asgiref.sync import sync_to_async
 from .models import CameraStream, PermFace, TempFace
@@ -35,44 +37,52 @@ class CameraConsumer(AsyncWebsocketConsumer):
             stream = await sync_to_async(CameraStream.objects.get)(id=self.stream_id)
             print(f'CameraConsumer.start_stream: Retrieved stream: {stream}')
 
-            # Use cv2.VideoCapture with RTSP transport
-            gst_str = ('rtspsrc location={} latency=0 ! '
-                       'rtph264depay ! h264parse ! avdec_h264 ! '
-                       'videoconvert ! appsink').format(stream.stream_url)
-            print(f'CameraConsumer.start_stream: GStreamer pipeline: {gst_str}')
-            cap = cv2.VideoCapture(gst_str, cv2.CAP_GSTREAMER)
+            print('CameraConsumer.start_stream: Initializing VLC instance')
+            instance = vlc.Instance()
+            print('CameraConsumer.start_stream: Creating media player')
+            player = instance.media_player_new()
+            print(f'CameraConsumer.start_stream: Creating media with URL: {stream.stream_url}')
+            media = instance.media_new(stream.stream_url)
+            print('CameraConsumer.start_stream: Setting media to player')
+            player.set_media(media)
+            print('CameraConsumer.start_stream: Starting playback')
+            player.play()
 
-            if not cap.isOpened():
-                print('CameraConsumer.start_stream: Failed to open video stream')
-                await self.send(text_data=json.dumps({
-                    'error': 'Failed to open video stream'
-                }))
-                return
-
-            print('CameraConsumer.start_stream: Video stream opened successfully')
+            print('CameraConsumer.start_stream: Entering stream loop')
             while not self.stop_stream:
-                ret, frame = cap.read()
-                if not ret:
-                    print('CameraConsumer.start_stream: Failed to read frame')
-                    break
-                
-                print('CameraConsumer.start_stream: Frame read successfully')
-                # Process frame (face detection)
-                processed_frame, detected_faces, detection_time = await sync_to_async(process_frame)(frame, stream.user)
-                print(f'CameraConsumer.start_stream: Frame processed, detected_faces: {detected_faces}, detection_time: {detection_time}')
-                
-                # Encode frame to base64
-                _, buffer = cv2.imencode('.jpg', processed_frame)
-                base64_frame = base64.b64encode(buffer).decode('utf-8')
-                print('CameraConsumer.start_stream: Frame encoded to base64')
-                
-                # Send frame and detected faces to client
-                await self.send(text_data=json.dumps({
-                    'frame': base64_frame,
-                    'detected_faces': detected_faces,
-                    'detection_time': detection_time
-                }))
-                print('CameraConsumer.start_stream: Frame and detected faces sent to client')
+                time.sleep(0.1)  # Adjust as needed
+                if player.get_state() == vlc.State.Playing:
+                    print('CameraConsumer.start_stream: Player is in Playing state')
+                    # Get frame from VLC
+                    print('CameraConsumer.start_stream: Attempting to get frame from VLC')
+                    player.video_take_snapshot(0, 'temp_frame.png', 0, 0)
+                    frame = cv2.imread('temp_frame.png')
+                    
+                    if frame is not None:
+                        print('CameraConsumer.start_stream: Frame successfully captured')
+                        # Process frame (face detection)
+                        print('CameraConsumer.start_stream: Processing frame')
+                        processed_frame, detected_faces, detection_time = await sync_to_async(process_frame)(frame, stream.user)
+                        print(f'CameraConsumer.start_stream: Frame processed, detected_faces: {detected_faces}, detection_time: {detection_time}')
+                        
+                        # Encode frame to base64
+                        print('CameraConsumer.start_stream: Encoding frame to base64')
+                        _, buffer = cv2.imencode('.jpg', processed_frame)
+                        base64_frame = base64.b64encode(buffer).decode('utf-8')
+                        print('CameraConsumer.start_stream: Frame encoded to base64')
+                        
+                        # Send frame and detected faces to client
+                        print('CameraConsumer.start_stream: Sending frame and detected faces to client')
+                        await self.send(text_data=json.dumps({
+                            'frame': base64_frame,
+                            'detected_faces': detected_faces,
+                            'detection_time': detection_time
+                        }))
+                        print('CameraConsumer.start_stream: Frame and detected faces sent to client')
+                    else:
+                        print('CameraConsumer.start_stream: Failed to capture frame')
+                else:
+                    print(f'CameraConsumer.start_stream: Player state: {player.get_state()}')
 
         except Exception as e:
             print(f'CameraConsumer.start_stream: Exception occurred: {str(e)}')
@@ -80,9 +90,9 @@ class CameraConsumer(AsyncWebsocketConsumer):
                 'error': str(e)
             }))
         finally:
-            if 'cap' in locals():
-                print('CameraConsumer.start_stream: Releasing video capture')
-                cap.release()
+            if 'player' in locals():
+                print('CameraConsumer.start_stream: Stopping VLC player')
+                player.stop()
             print('CameraConsumer.start_stream: Closing WebSocket connection')
             await self.close()
 
