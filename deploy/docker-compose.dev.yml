@@ -1,0 +1,14 @@
+services:
+    api:
+        build:
+            target: dev
+            context: .
+        volumes:
+        -   .:/app/src/:delegated
+        environment:
+            RELOAD: "True"
+            ENV: "production"
+            LITESTAR_APP: "thirdeye_backend.web.application:third_eye_app"
+        command: litestar run --reload --host 0.0.0.0 --port 8000
+        ports:
+        -   "8000:8000"

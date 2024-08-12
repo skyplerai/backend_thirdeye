@@ -1,0 +1,16 @@
+services:
+    api:
+        build:
+            context: deploy
+            dockerfile: ./deploy/Dockerfile
+            target: prod
+        image: thirdeye_backend:${THIRDEYE_BACKEND_VERSION:-latest}
+        restart: always
+        env_file:
+        -   .env
+        ports:
+        -   "8000:8000"
+        environment:
+            ENV: "production"
+            LITESTAR_APP: "thirdeye_backend.web.application:third_eye_app"
+        command: litestar run --reload
