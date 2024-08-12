@@ -42,8 +42,5 @@ jobs:
         -   name: Run ruff check
             run: poetry run ruff check .
 
-        -   name: Run black check
-            run: poetry run black --check .
-
         -   name: Run mypy check
             run: poetry run mypy --config-file pyproject.toml .
